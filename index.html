@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Balap Mobil 3D - Turbo Racer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D Graphics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        #game-canvas {
+            width: 100%;
+            height: 100vh;
+            display: block;
+        }
+        /* Glassmorphism UI Effects */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-button {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(185, 28, 28, 0.9));
+            transition: all 0.2s ease;
+        }
+        .glass-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -10px rgba(239, 68, 68, 0.6);
+        }
+        .glass-button:active {
+            transform: translateY(1px);
+        }
+        /* Custom Keyframe Animations */
+        @keyframes pulse-speed {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+        .speed-boost {
+            animation: pulse-speed 0.5s infinite alternate;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-white overflow-hidden select-none">
+
+    <!-- Canvas Utama 3D -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Overlay UI Permainan -->
+    <div id="ui-container" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 md:p-6">
+        
+        <!-- Header / Stats Bar -->
+        <div class="flex justify-between items-start w-full">
+            <!-- Skor & Koin -->
+            <div class="glass-panel px-4 py-3 rounded-2xl flex items-center space-x-6">
+                <div>
+                    <div class="text-xs text-slate-400 font-semibold tracking-wider">JARAK</div>
+                    <div id="score-text" class="text-2xl md:text-3xl font-orbitron font-bold text-yellow-400">0 m</div>
+                </div>
+                <div class="h-8 w-px bg-slate-700"></div>
+                <div>
+                    <div class="text-xs text-slate-400 font-semibold tracking-wider">KOIN</div>
+                    <div id="coins-text" class="text-2xl md:text-3xl font-orbitron font-bold text-amber-300 flex items-center gap-1">
+                        <i class="fa-solid font-bold fa-coins text-xl text-amber-400"></i> <span id="coin-count">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spedometer & Boost Status -->
+            <div class="glass-panel px-5 py-3 rounded-2xl text-right">
+                <div class="text-xs text-slate-400 font-semibold tracking-wider">KECEPATAN</div>
+                <div id="speed-text" class="text-3xl md:text-4xl font-orbitron font-black text-cyan-400">0 <span class="text-sm font-normal text-slate-400">km/h</span></div>
+                <div id="boost-bar-container" class="w-32 h-2 bg-slate-800 rounded-full mt-2 overflow-hidden border border-slate-700">
+                    <div id="boost-bar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 w-full transition-all duration-100"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Touch Controls untuk Perangkat Mobile (Tampil di Layar Sentuh / Mobile) -->
+        <div class="pointer-events-auto md:hidden grid grid-cols-3 gap-3 w-full max-w-md mx-auto mb-2 opacity-80 hover:opacity-100 transition-opacity">
+            <button id="btn-left" class="glass-panel py-5 rounded-2xl text-center active:bg-slate-700 text-2xl font-bold">
+                <i class="fa-solid fa-arrow-left text-cyan-400"></i>
+            </button>
+            <div class="grid grid-rows-2 gap-2">
+                <button id="btn-boost" class="glass-panel py-2 rounded-xl text-center active:bg-amber-600 bg-amber-500/20 text-amber-400 font-orbitron font-bold text-xs border border-amber-500/40">
+                    BOOST
+                </button>
+                <button id="btn-brake" class="glass-panel py-2 rounded-xl text-center active:bg-red-600 bg-red-500/20 text-red-400 font-orbitron font-bold text-xs border border-red-500/40">
+                    REM
+                </button>
+            </div>
+            <button id="btn-right" class="glass-panel py-5 rounded-2xl text-center active:bg-slate-700 text-2xl font-bold">
+                <i class="fa-solid fa-arrow-right text-cyan-400"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen Start / Pause / Game Over Modals -->
+    <!-- Menu Utama (Start Screen) -->
+    <div id="start-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4">
+        <div class="glass-panel p-8 rounded-3xl max-w-md w-full text-center border border-slate-800 shadow-2xl relative overflow-hidden">
+            <div class="absolute -top-24 -left-24 w-48 h-48 bg-red-500/20 rounded-full blur-3xl"></div>
+            <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-cyan-500/20 rounded-full blur-3xl"></div>
+
+            <div class="inline-flex p-4 bg-red-500/10 rounded-2xl mb-4 border border-red-500/20">
+                <i class="fa-solid fa-car-side text-4xl text-red-500"></i>
+            </div>
+            <h1 class="text-4xl font-black font-orbitron tracking-wide text-white mb-2">TURBO <span class="text-red-500">RACER</span></h1>
+            <p class="text-slate-400 text-sm mb-6">Kemudikan mobil Anda, hindari rintangan, dan kumpulkan koin sebanyak mungkin!</p>
+
+            <div class="space-y-3 mb-8 text-left bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 text-xs text-slate-300">
+                <div class="flex items-center justify-between">
+                    <span><i class="fa-solid fa-keyboard text-cyan-400 w-5"></i> Belok Kiri / Kanan:</span>
+                    <span class="font-semibold text-white">Panah / A & D</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span><i class="fa-solid fa-bolt text-amber-400 w-5"></i> Nitro Boost:</span>
+                    <span class="font-semibold text-white">Spasi / Panah Atas</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span><i class="fa-solid fa-hand text-red-400 w-5"></i> Rem:</span>
+                    <span class="font-semibold text-white">Panah Bawah / S</span>
+                </div>
+            </div>
+
+            <button id="start-btn" class="glass-button w-full py-4 rounded-xl font-orbitron font-bold text-lg text-white shadow-lg tracking-wider flex items-center justify-center gap-2">
+                <i class="fa-solid fa-play"></i> MULAI BALAPAN
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Game Over -->
+    <div id="game-over-screen" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4">
+        <div class="glass-panel p-8 rounded-3xl max-w-md w-full text-center border border-red-900/40 shadow-2xl">
+            <div class="inline-flex p-4 bg-red-500/10 rounded-2xl mb-3 border border-red-500/20 text-red-500">
+                <i class="fa-solid fa-burst text-4xl"></i>
+            </div>
+            <h2 class="text-3xl font-black font-orbitron text-red-500 mb-1">TABRAKAN!</h2>
+            <p class="text-slate-400 text-sm mb-6">Mobil Anda mengalami kerusakan total.</p>
+
+            <div class="bg-slate-900/80 rounded-2xl p-4 mb-6 border border-slate-800 space-y-3">
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-400">Total Jarak Tempuh</span>
+                    <span id="final-score" class="font-orbitron font-bold text-lg text-yellow-400">0 m</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-400">Koin Dikumpulkan</span>
+                    <span id="final-coins" class="font-orbitron font-bold text-lg text-amber-400">0</span>
+                </div>
+                <div class="border-t border-slate-800 pt-2 flex justify-between items-center text-sm">
+                    <span class="text-slate-400">Skor Tertinggi</span>
+                    <span id="high-score" class="font-orbitron font-bold text-lg text-cyan-400">0 m</span>
+                </div>
+            </div>
+
+            <button id="restart-btn" class="glass-button w-full py-4 rounded-xl font-orbitron font-bold text-lg text-white shadow-lg tracking-wider flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-right"></i> COBA LAGI
+            </button>
+        </div>
+    </div>
+
+    <!-- Audio Synthesizer Engine (Tanpa File Eksternal) -->
+    <script>
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.engineOsc = null;
+                this.engineGain = null;
+                this.isMuted = false;
+            }
+
+            init() {
+                if (this.ctx) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+
+                // Sound Effect Engine (Loop Sederhana)
+                this.engineOsc = this.ctx.createOscillator();
+                this.engineGain = this.ctx.createGain();
+
+                this.engineOsc.type = 'sawtooth';
+                this.engineOsc.frequency.setValueAtTime(40, this.ctx.currentTime);
+                this.engineGain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+
+                // Lowpass filter untuk membuat suara mesin lebih mantap
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(300, this.ctx.currentTime);
+
+                this.engineOsc.connect(filter);
+                filter.connect(this.engineGain);
+                this.engineGain.connect(this.ctx.destination);
+                this.engineOsc.start();
+            }
+
+            updateEngineSpeed(speedRatio) {
+                if (!this.ctx || this.isMuted) return;
+                const pitch = 40 + (speedRatio * 120);
+                this.engineOsc.frequency.setTargetAtTime(pitch, this.ctx.currentTime, 0.1);
+            }
+
+            playCoinSound() {
+                if (!this.ctx || this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.1);
+                
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playCrashSound() {
+                if (!this.ctx || this.isMuted) return;
+                // Noise buffer untuk suara ledakan/tabrakan
+                const bufferSize = this.ctx.sampleRate * 0.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(800, this.ctx.currentTime);
+                filter.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + 0.5);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                noise.start();
+                noise.stop(this.ctx.currentTime + 0.5);
+            }
+        }
+
+        const audioFX = new SoundEngine();
+    </script>
+
+    <!-- Game Core Logic -->
+    <script>
+        // State Permainan
+        const state = {
+            isPlaying: false,
+            score: 0,
+            coins: 0,
+            highScore: localStorage.getItem('turbo_racer_highscore') || 0,
+            speed: 0,
+            maxSpeed: 120, // km/h
+            baseSpeed: 60,
+            acceleration: 0.4,
+            deceleration: 0.3,
+            laneWidth: 3.5,
+            playerX: 0,
+            targetX: 0,
+            boostEnergy: 100,
+            isBoosting: false
+        };
+
+        // Keyboard & Touch Control Handler
+        const keys = {
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
+
+        // Window Event Listeners
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') keys.up = true;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') keys.up = false;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = false;
+        });
+
+        // Mobile Control Setup
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        const btnBoost = document.getElementById('btn-boost');
+        const btnBrake = document.getElementById('btn-brake');
+
+        const bindTouch = (elem, keyName) => {
+            elem.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+            elem.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+            elem.addEventListener('mousedown', () => { keys[keyName] = true; });
+            elem.addEventListener('mouseup', () => { keys[keyName] = false; });
+        };
+
+        bindTouch(btnLeft, 'left');
+        bindTouch(btnRight, 'right');
+        bindTouch(btnBoost, 'up');
+        bindTouch(btnBrake, 'down');
+
+        // Setup 3D Scene dengan Three.js
+        let scene, camera, renderer;
+        let playerCar, playerBody;
+        let roadSegments = [];
+        let obstacles = [];
+        let coins = [];
+        let particleSystem;
+
+        const ROAD_LENGTH = 400;
+        const ROAD_WIDTH = 12;
+
+        function init3D() {
+            const canvas = document.getElementById('game-canvas');
+            
+            // Scene & Camera
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d);
+            scene.fog = new THREE.FogExp2(0x0a0f1d, 0.015);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 3.5, -7);
+            camera.lookAt(0, 1, 10);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(20, 40, -20);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // Buat Elemen Lingkungan
+            createRoad();
+            createPlayerCar();
+            createParticles();
+
+            // Resize Event
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // Membuat Jalan Raya & Marka
+        function createRoad() {
+            // Base Road Surface
+            const roadGeo = new THREE.PlaneGeometry(ROAD_WIDTH, ROAD_LENGTH);
+            const roadMat = new THREE.MeshStandardMaterial({ 
+                color: 0x1e293b, 
+                roughness: 0.8 
+            });
+            
+            const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+            roadMesh.rotation.x = -Math.PI / 2;
+            roadMesh.position.z = ROAD_LENGTH / 2 - 20;
+            scene.add(roadMesh);
+
+            // Rumput / Pinggir Jalan Left & Right
+            const grassGeo = new THREE.PlaneGeometry(100, ROAD_LENGTH);
+            const grassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+
+            const grassLeft = new THREE.Mesh(grassGeo, grassMat);
+            grassLeft.rotation.x = -Math.PI / 2;
+            grassLeft.position.set(-ROAD_WIDTH/2 - 50, -0.05, ROAD_LENGTH / 2 - 20);
+            scene.add(grassLeft);
+
+            const grassRight = new THREE.Mesh(grassGeo, grassMat);
+            grassRight.rotation.x = -Math.PI / 2;
+            grassRight.position.set(ROAD_WIDTH/2 + 50, -0.05, ROAD_LENGTH / 2 - 20);
+            scene.add(grassRight);
+
+            // Pembatas Jalan (Guard Rails)
+            for (let i = 0; i < ROAD_LENGTH; i += 10) {
+                createBarrier(-ROAD_WIDTH/2 - 0.2, i);
+                createBarrier(ROAD_WIDTH/2 + 0.2, i);
+            }
+
+            // Strips Marka Jalan Berkala
+            const stripeGeo = new THREE.PlaneGeometry(0.3, 3);
+            const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+
+            for (let z = 0; z < ROAD_LENGTH; z += 8) {
+                // Strip Kiri
+                const stripeL = new THREE.Mesh(stripeGeo, stripeMat);
+                stripeL.rotation.x = -Math.PI / 2;
+                stripeL.position.set(-ROAD_WIDTH/6, 0.01, z);
+                scene.add(stripeL);
+                roadSegments.push(stripeL);
+
+                // Strip Kanan
+                const stripeR = new THREE.Mesh(stripeGeo, stripeMat);
+                stripeR.rotation.x = -Math.PI / 2;
+                stripeR.position.set(ROAD_WIDTH/6, 0.01, z);
+                scene.add(stripeR);
+                roadSegments.push(stripeR);
+            }
+        }
+
+        function createBarrier(x, z) {
+            const barrierGeo = new THREE.BoxGeometry(0.3, 0.8, 8);
+            const barrierMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+            const barrier = new THREE.Mesh(barrierGeo, barrierMat);
+            barrier.position.set(x, 0.4, z);
+            scene.add(barrier);
+        }
+
+        // Membuat Car Player (Mobil 3D Sederhana & Modern)
+        function createPlayerCar() {
+            playerCar = new THREE.Group();
+
+            // Bodi Utama Mobil
+            const bodyGeo = new THREE.BoxGeometry(1.6, 0.6, 3.2);
+            const bodyMat = new THREE.MeshStandardMaterial({ 
+                color: 0xef4444, 
+                metalness: 0.6, 
+                roughness: 0.2 
+            });
+            playerBody = new THREE.Mesh(bodyGeo, bodyMat);
+            playerBody.position.y = 0.5;
+            playerBody.castShadow = true;
+            playerCar.add(playerBody);
+
+            // Atap & Kaca Mobil
+            const cabinGeo = new THREE.BoxGeometry(1.3, 0.5, 1.6);
+            const cabinMat = new THREE.MeshStandardMaterial({ 
+                color: 0x0f172a, 
+                roughness: 0.1 
+            });
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.position.set(0, 0.9, -0.2);
+            playerCar.add(cabin);
+
+            // Lampu Depan (Headlights)
+            const lightGeo = new THREE.BoxGeometry(0.3, 0.15, 0.1);
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+            
+            const lightLeft = new THREE.Mesh(lightGeo, lightMat);
+            lightLeft.position.set(-0.6, 0.5, 1.6);
+            playerCar.add(lightLeft);
+
+            const lightRight = new THREE.Mesh(lightGeo, lightMat);
+            lightRight.position.set(0.6, 0.5, 1.6);
+            playerCar.add(lightRight);
+
+            // Lampu Belakang
+            const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const tailLeft = new THREE.Mesh(lightGeo, tailLightMat);
+            tailLeft.position.set(-0.6, 0.5, -1.6);
+            playerCar.add(tailLeft);
+
+            const tailRight = new THREE.Mesh(lightGeo, tailLightMat);
+            tailRight.position.set(0.6, 0.5, -1.6);
+            playerCar.add(tailRight);
+
+            // Roda Mobil (4 Roda)
+            const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+            
+            const wheelPositions = [
+                [-0.85, 0.35, 1],
+                [0.85, 0.35, 1],
+                [-0.85, 0.35, -1],
+                [0.85, 0.35, -1]
+            ];
+
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(...pos);
+                playerCar.add(wheel);
+            });
+
+            playerCar.position.set(0, 0, 0);
+            scene.add(playerCar);
+        }
+
+        // Efek Partikel Kecepatan (Speed Lines/Stars)
+        function createParticles() {
+            const count = 100;
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+
+            for(let i=0; i<count*3; i+=3) {
+                positions[i] = (Math.random() - 0.5) * 40;
+                positions[i+1] = Math.random() * 10;
+                positions[i+2] = Math.random() * 200;
+            }
+
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({ color: 0x38bdf8, size: 0.15, transparent: true, opacity: 0.6 });
+            particleSystem = new THREE.Points(geo, mat);
+            scene.add(particleSystem);
+        }
+
+        // Generator Obstacles (Mobil Musuh / Rintangan)
+        function spawnObstacle() {
+            const lanes = [-state.laneWidth, 0, state.laneWidth];
+            const lane = lanes[Math.floor(Math.random() * lanes.length)];
+
+            const obsGroup = new THREE.Group();
+            
+            // Variasi Warna Mobil Musuh
+            const colors = [0x3b82f6, 0x10b981, 0x8b5cf6, 0xf59e0b];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+
+            const bodyGeo = new THREE.BoxGeometry(1.6, 0.6, 3);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.3 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.5;
+            obsGroup.add(body);
+
+            const cabinGeo = new THREE.BoxGeometry(1.3, 0.5, 1.4);
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.position.set(0, 0.9, -0.1);
+            obsGroup.add(cabin);
+
+            // Posisi di Depan Jauh
+            obsGroup.position.set(lane, 0, playerCar.position.z + 120 + Math.random() * 40);
+            scene.add(obsGroup);
+            obstacles.push(obsGroup);
+        }
+
+        // Generator Koin
+        function spawnCoin() {
+            const lanes = [-state.laneWidth, 0, state.laneWidth];
+            const lane = lanes[Math.floor(Math.random() * lanes.length)];
+
+            const coinGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 16);
+            const coinMat = new THREE.MeshStandardMaterial({ 
+                color: 0xfacc15, 
+                metalness: 0.8, 
+                roughness: 0.2 
+            });
+            
+            const coin = new THREE.Mesh(coinGeo, coinMat);
+            coin.rotation.x = Math.PI / 2;
+            coin.position.set(lane, 0.7, playerCar.position.z + 100 + Math.random() * 50);
+            
+            scene.add(coin);
+            coins.push(coin);
+        }
+
+        // Resize Window
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Gameloop & Pembaruan Logika
+        let clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            if (state.isPlaying) {
+                updateGameLogic(delta);
+            }
+
+            // Animasi Rotasi Koin (Bahkan Saat Idle/GameOver)
+            coins.forEach(coin => coin.rotation.z += 0.03);
+
+            renderer.render(scene, camera);
+        }
+
+        function updateGameLogic(delta) {
+            // Kontrol Kecepatan (Accelerate / Brake / Boost)
+            if (keys.up && state.boostEnergy > 5) {
+                state.isBoosting = true;
+                state.speed = Math.min(state.speed + state.acceleration * 2, state.maxSpeed * 1.4);
+                state.boostEnergy = Math.max(0, state.boostEnergy - delta * 40);
+            } else {
+                state.isBoosting = false;
+                if (keys.down) {
+                    state.speed = Math.max(0, state.speed - state.deceleration * 3);
+                } else {
+                    // Normal auto throttle / coasting
+                    if (state.speed < state.baseSpeed) {
+                        state.speed += state.acceleration;
+                    } else if (state.speed > state.baseSpeed) {
+                        state.speed -= state.deceleration;
+                    }
+                }
+                // Isi kembali energi boost perlahan
+                if (state.boostEnergy < 100) {
+                    state.boostEnergy = Math.min(100, state.boostEnergy + delta * 15);
+                }
+            }
+
+            // Update Suara Mesin berdasarkan Kecepatan
+            audioFX.updateEngineSpeed(state.speed / state.maxSpeed);
+
+            // Gerakan Kemudi Lateral (Kiri - Kanan)
+            const laneSpeed = 12;
+            if (keys.left && state.playerX > -state.laneWidth - 0.5) {
+                state.playerX -= laneSpeed * delta;
+            }
+            if (keys.right && state.playerX < state.laneWidth + 0.5) {
+                state.playerX += laneSpeed * delta;
+            }
+
+            // Smooth Movement & Rotation Roll effect
+            playerCar.position.x += (state.playerX - playerCar.position.x) * 0.2;
+            playerCar.rotation.z = -(playerCar.position.x - state.playerX) * 0.15;
+            playerCar.rotation.y = (playerCar.position.x - state.playerX) * 0.05;
+
+            // Tambah Skor berdasarkan Jarak Tempuh
+            const distanceMoved = (state.speed * delta);
+            state.score += Math.round(distanceMoved * 0.5);
+
+            // Pergerakan Segmen Jalan (Illusi Berjalan)
+            roadSegments.forEach(segment => {
+                segment.position.z -= distanceMoved * 0.5;
+                if (segment.position.z < playerCar.position.z - 10) {
+                    segment.position.z += ROAD_LENGTH;
+                }
+            });
+
+            // Pergerakan Partikel
+            const pos = particleSystem.geometry.attributes.position.array;
+            for (let i = 2; i < pos.length; i += 3) {
+                pos[i] -= distanceMoved * 0.8;
+                if (pos[i] < 0) pos[i] = 200;
+            }
+            particleSystem.geometry.attributes.position.needsUpdate = true;
+
+            // Spawning Mechanism
+            if (Math.random() < 0.025) spawnObstacle();
+            if (Math.random() < 0.03) spawnCoin();
+
+            // Update Obstacles & Collision Check
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.position.z -= distanceMoved * 0.5;
+
+                // Cek Tabrakan (Bounding Box Sederhana)
+                const dx = Math.abs(playerCar.position.x - obs.position.x);
+                const dz = Math.abs(playerCar.position.z - obs.position.z);
+
+                if (dx < 1.4 && dz < 2.5) {
+                    triggerGameOver();
+                    return;
+                }
+
+                // Hapus obstacle yang lewat di belakang
+                if (obs.position.z < playerCar.position.z - 15) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Update Coins & Collection Check
+            for (let i = coins.length - 1; i >= 0; i--) {
+                const coin = coins[i];
+                coin.position.z -= distanceMoved * 0.5;
+
+                const dx = Math.abs(playerCar.position.x - coin.position.x);
+                const dz = Math.abs(playerCar.position.z - coin.position.z);
+
+                if (dx < 1.2 && dz < 1.5) {
+                    // Ambil Koin
+                    state.coins += 1;
+                    audioFX.playCoinSound();
+                    scene.remove(coin);
+                    coins.splice(i, 1);
+                } else if (coin.position.z < playerCar.position.z - 15) {
+                    scene.remove(coin);
+                    coins.splice(i, 1);
+                }
+            }
+
+            // Update UI Interface
+            document.getElementById('score-text').innerText = `${state.score} m`;
+            document.getElementById('coin-count').innerText = state.coins;
+            document.getElementById('speed-text').innerHTML = `${Math.round(state.speed)} <span class="text-sm font-normal text-slate-400">km/h</span>`;
+            document.getElementById('boost-bar').style.width = `${state.boostEnergy}%`;
+
+            if (state.isBoosting) {
+                document.getElementById('speed-text').classList.add('speed-boost');
+            } else {
+                document.getElementById('speed-text').classList.remove('speed-boost');
+            }
+        }
+
+        // Mulai Game
+        function startGame() {
+            // Reset State
+            state.score = 0;
+            state.coins = 0;
+            state.speed = state.baseSpeed;
+            state.playerX = 0;
+            state.boostEnergy = 100;
+            state.isPlaying = true;
+
+            // Clean scene obstacles & coins
+            obstacles.forEach(obs => scene.remove(obs));
+            coins.forEach(c => scene.remove(c));
+            obstacles = [];
+            coins = [];
+
+            playerCar.position.set(0, 0, 0);
+
+            // Inisialisasi Audio Engine
+            audioFX.init();
+
+            // Toggle UI Screens
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+        }
+
+        // Game Over Handler
+        function triggerGameOver() {
+            state.isPlaying = false;
+            audioFX.playCrashSound();
+
+            // Simpan Skor Tertinggi
+            if (state.score > state.highScore) {
+                state.highScore = state.score;
+                localStorage.setItem('turbo_racer_highscore', state.highScore);
+            }
+
+            // Tampilkan Modal Hasil Game Over
+            document.getElementById('final-score').innerText = `${state.score} m`;
+            document.getElementById('final-coins').innerText = state.coins;
+            document.getElementById('high-score').innerText = `${state.highScore} m`;
+
+            document.getElementById('game-over-screen').classList.remove('hidden');
+        }
+
+        // Action Buttons Setup
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', startGame);
+
+        // Window Init Execution
+        window.onload = function () {
+            init3D();
+            animate();
+        };
+    </script>
+</body>
+</html>
